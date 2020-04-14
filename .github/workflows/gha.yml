@@ -2,12 +2,16 @@ name: CI
 
 on:
   pull_request:
+    branches:
+      - gha
     types: [opened, synchronize]
     paths-ignore:
       - '**.md'
       - 'ChangeLog*'
       - 'LICENSE'
   push:
+    branches:
+      - gha
     paths-ignore:
       - '**.md'
       - 'ChangeLog*'
@@ -21,6 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-18.04]
         EVHTP_MATRIX:
+          - NONE
           - Debug
 
     steps:
@@ -41,6 +46,9 @@ jobs:
           if [ "${{ matrix.EVHTP_MATRIX }}" == "Debug" ]; then
             EVHTP_CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=Debug"
           fi
+          if [ "${{ matrix.EVHTP_MATRIX }}" == "NONE" ]; then
+            EVHTP_CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE="""
+          fi
 
           mkdir -p build
           cd build
@@ -60,6 +68,7 @@ jobs:
       fail-fast: false
       matrix:
         EVHTP_MATRIX:
+          - NONE
           - Debug
 
     steps:
@@ -93,6 +102,10 @@ jobs:
           if ( "${{ matrix.EVHTP_MATRIX }}" -ne "Debug" ) {
             $EVHTP_CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=Debug"
           }
+          if ( "${{ matrix.EVHTP_MATRIX }}" -ne "NONE" ) {
+            $EVHTP_CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE="""
+          }
+        
           $env:PATH="D:\a\_temp\msys\msys64\mingw64\bin;D:\a\_temp\msys\msys64;$env:PATH"
           mkdir build -ea 0
           cd build
@@ -102,4 +115,49 @@ jobs:
         if: failure()
         with:
           name: mingw-${{ matrix.EVHTP_MATRIX }}-build
+          path: build
+
+  mac-cmake:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+        EVHTP_MATRIX:
+          - Debug
+          - NONE
+
+    steps:
+      - uses: actions/checkout@v2.0.0
+      - name: Cache Build
+        uses: actions/cache@v1.1.0
+        with:
+          path: build
+          key: ${{ matrix.os }}-cmake-${{ matrix.EVHTP_MATRIX }}
+
+      - name: Install Dependes
+        run: |
+          brew install libevent oniguruma
+
+      - name: Build And Test
+        shell: bash
+        run: |
+          if [ "${{ matrix.EVHTP_MATRIX }}" == "Debug" ]; then
+            EVHTP_CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=Debug"
+          fi
+          if [ "${{ matrix.EVHTP_MATRIX }}" == "NONE" ]; then
+            EVHTP_CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE="""
+          fi
+
+          export OPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
+          mkdir -p build
+          cd build
+          echo [cmake]: cmake .. $EVHTP_CMAKE_OPTIONS
+          cmake .. $EVHTP_CMAKE_OPTIONS
+          cmake --build .
+         
+      - uses: actions/upload-artifact@v1
+        if: failure()
+        with:
+          name: ${{ matrix.os }}-cmake-${{ matrix.EVHTP_MATRIX }}-build
           path: build
